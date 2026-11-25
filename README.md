@@ -11,10 +11,16 @@ The Gin API stores a service catalog in memory. Data disappears on restart, and 
 3. Restricted pull request creation to collaborators. The repository is public so people can see the work, but it isn't intended as a shared project.
 4. Added a GitHub Actions workflow for linting and race tests on pull requests and pushes to `main`. Those checks have read-only repository permissions and no deployment credentials. Action version tags can move, so their code can change over time.
 5. Verified both checks on GitHub and added `lint` and `test` as required checks in the `main` ruleset.
+6. Published a commit-SHA-tagged image to GHCR and pulled it successfully. The package is public so others can try the demo without registry credentials. Publishing still requires permission; the planned Arcane dashboard and deployment webhook remain private.
+
+If I make the package private later:
+
+- The publishing job can keep using `GITHUB_TOKEN` with `packages: write`, as long as this repository's Actions workflows retain write access to the package. Check the package's Actions access settings if publishing fails.
+- Server (Arcane) will need GHCR registry credentials from an account with access to the package and a token with `read:packages` so it can pull the image. Configure the credential in Arcane and keep the token outside Git. Pulling from other machines will also require authentication. I haven't tested private GHCR pulls through Arcane yet.
 
 ## What's next
 
-A publish job is set up to build and push a commit-SHA-tagged image to GHCR after checks pass on `main`. The image reports version `dev` and its commit SHA. Only the publish job has package write permission, and it still needs to be verified on GitHub. Later, use short-lived Tailscale access and an authenticated Arcane webhook to deploy it. That deployment flow hasn't been verified yet.
+The publish job builds and pushes an image after checks pass on `main`. The image reports version `dev` and its commit SHA, and only the publish job has package write permission. Later, use short-lived Tailscale access and an authenticated Arcane webhook to deploy it. That deployment flow hasn't been verified yet.
 
 Before deployment, I still need to protect workflow changes, keep credentials out of Git and logs, and plan rollback and deployment concurrency. Dependency, image, and secret scanning will come later, so images aren't automatically checked for known vulnerabilities yet.
 
