@@ -10,9 +10,11 @@ This repository is the application used by a separate self-hosted infrastructure
 
 ## CI/CD plans
 
-There are no GitHub Actions workflows in this repository yet. I'm planning to run linting and tests on pull requests and on trusted pushes to `main`, then build and publish an image to GHCR only from `main` if those checks pass. The image should include the Git commit in `/version` so I can check what is running.
+The CI workflow runs linting and race tests on pull requests and pushes to `main`. It still needs to be verified on GitHub. I'm planning to build and publish an image to GHCR only from trusted pushes to `main` if those checks pass. The image should include the Git commit in `/version` so I can check what is running.
 
-This is a personal learning project, and I intend to be the only person who merges changes into `main`. People can still open pull requests because the repository is public. Pull request workflows will only lint and test; they won't publish images or have deployment credentials. I'll review changes before deciding whether to merge.
+This is a personal learning project, and I intend to be the only person who merges changes into `main`. GitHub's pull request permission is intended to be set to **Creation allowed by collaborators only**, even though the repository is public. I'll keep collaborator access limited to people I trust. Pull request workflows will only lint and test; they won't publish images or have deployment credentials.
+
+The `main` ruleset is active: it requires a pull request, blocks branch deletion and force pushes, and has no bypass actors. It requires zero approving reviews because I can't approve my own pull requests. Required status checks haven't been configured yet; I'll add lint and test checks after the workflow has run on a pull request.
 
 Later, the deployment workflow will temporarily join Tailscale and call an authenticated Arcane webhook. Arcane will pull the published image, so the server won't need an application source checkout or SSH access from the runner. This deployment flow hasn't been verified yet; the infrastructure lives in a separate repository.
 
@@ -20,7 +22,7 @@ Since this is a public repository, I want to have these protections in place bef
 
 - Protect `main` and changes to workflow files, restrict who can push or merge where the repository's GitHub plan supports it, and require the pull request checks before merging.
 - Run pull request checks with read-only permissions and no publishing or deployment credentials. Don't run untrusted pull request code in a privileged workflow.
-- Give GitHub Actions the minimum token permissions needed, including package write access only for the publishing job. Pin third-party actions to full commit SHAs.
+- Give GitHub Actions the minimum token permissions needed, including package write access only for the publishing job. Actions use readable version tags, so their referenced code can change when those tags move.
 - Keep credentials out of the repository and logs. Use short-lived, narrowly scoped OIDC credentials for an ephemeral Tailscale runner and an authenticated, project-scoped webhook if Arcane supports it.
 - Publish traceable image tags or digests and plan for rollback and deployment concurrency. Keep Arcane private and expose only the application through Cloudflare Tunnel.
 
