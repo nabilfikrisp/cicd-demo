@@ -2,7 +2,7 @@
 
 A small Go API I'm using to learn about CI/CD and deployments. This is a personal project, made public to show what I've tried. I'm still figuring things out, so it will probably change.
 
-The Gin API stores a service catalog in memory. Data disappears on restart, and the catalog doesn't manage actual services. Deployment infrastructure lives in a separate repository.
+The Gin API stores a service catalog in memory. Data disappears on restart, and the catalog doesn't manage actual services. Deployment infrastructure lives in the separate [cicd-infra repository](https://github.com/nabilfikrisp/cicd-infra).
 
 ## Progress so far
 
