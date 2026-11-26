@@ -20,7 +20,7 @@ If I make the package private later:
 
 ## What's next
 
-The publish job builds and pushes an image after checks pass on `main`. The image reports version `dev` and its commit SHA, and only the publish job has package write permission. Later, use short-lived Tailscale access and an authenticated Arcane webhook to deploy it. That deployment flow hasn't been verified yet.
+The publish job builds and pushes an image after checks pass on `main`, tagging it with both the full commit SHA and `main`. The image reports version `dev` and its commit SHA, and only the publish job has package write permission. Later, use short-lived Tailscale access and an authenticated Arcane webhook to deploy it. That deployment flow hasn't been verified yet.
 
 Before deployment, I still need to protect workflow changes, keep credentials out of Git and logs, and plan rollback and deployment concurrency. Dependency, image, and secret scanning will come later, so images aren't automatically checked for known vulnerabilities yet.
 
@@ -39,6 +39,8 @@ Or run with Docker Compose:
 ```bash
 docker compose up --build
 ```
+
+Compose checks the API's `/health` endpoint and reports the container's health status.
 
 Try the API:
 
@@ -61,3 +63,5 @@ docker run --rm -p 3003:3003 cicd-demo:1.0.0
 ```
 
 `/version` reports the supplied version and commit, or `dev` and `unknown` by default. A local build can include uncommitted changes that the commit SHA doesn't describe.
+
+The Docker image defaults to Gin's release mode. Set `GIN_MODE=debug` when running the container to enable debug mode; local runs use Gin's default unless `GIN_MODE` is set.
