@@ -20,9 +20,15 @@ If I make the package private later:
 
 ## What's next
 
-The publish job builds and pushes an image after checks pass on `main`, tagging it with both the full commit SHA and `main`. The image reports version `dev` and its commit SHA, and only the publish job has package write permission. Later, use short-lived Tailscale access and an authenticated Arcane webhook to deploy it. That deployment flow hasn't been verified yet.
+After checks pass on `main`, the publish job builds one image and pushes it with both the full commit SHA and `main` tags. It then joins Tailscale using GitHub OIDC and sends Arcane a redeploy request. The job succeeds when Arcane returns HTTP 202; Arcane reports deployment failures separately. This automated flow still needs end-to-end verification.
 
-Before deployment, I still need to protect workflow changes, keep credentials out of Git and logs, and plan rollback and deployment concurrency. Dependency, image, and secret scanning will come later, so images aren't automatically checked for known vulnerabilities yet.
+The publish and notification steps share a concurrency lock. A run checks that its commit is still the `main` branch head before pushing the moving tag, so stale queued or rerun workflows fail rather than replace it. GitHub may replace pending runs, and the lock ends when Arcane accepts the request; a later publication may therefore change the image Arcane pulls. Only this workflow's publish job participates in the lock.
+
+Configure repository secrets `TS_OIDC_CLIENT_ID`, `TS_OIDC_AUDIENCE`, and `ARCANE_WEBHOOK_URL`. The Tailscale federated identity must trust the repository's `main` branch, have Auth Keys write access for `tag:runner`, and the tailnet policy must allow that tag to reach Arcane on TCP 443. The webhook URL must use HTTPS on port 443. Only the publish job has package write and OIDC permissions.
+
+To roll back, change the image in the VPS Compose project to `ghcr.io/nabilfikrisp/cicd-demo:<full-commit-sha>` for a known good release, then redeploy it through Arcane. Restore `:main` when ready to resume following new builds; a later automated deployment can otherwise replace the rollback.
+
+Dependency, image, and secret scanning will come later, so images aren't automatically checked for known vulnerabilities yet.
 
 ## Run and test
 

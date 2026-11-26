@@ -39,13 +39,17 @@ jobs:
         run: make test
 
   publish:
-    name: publish
+    name: publish and notify Arcane
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [lint, test]
     runs-on: ubuntu-latest
+    concurrency:
+      group: production-main
+      cancel-in-progress: false
     permissions:
       contents: read
       packages: write
+      id-token: write
     steps:
       - name: Check out code
         uses: actions/checkout@v6
@@ -65,7 +69,53 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
       - name: Push image
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           image="ghcr.io/${GITHUB_REPOSITORY,,}"
           docker push "$image:$GITHUB_SHA"
+          head_sha="$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/git/ref/heads/main" | jq -er '.object.sha')"
+          if [ "$head_sha" != "$GITHUB_SHA" ]; then
+            echo 'This run is stale; refusing to update the main image tag.' >&2
+            exit 1
+          fi
           docker push "$image:main"
+      - name: Get Arcane gateway hostname
+        id: arcane
+        env:
+          ARCANE_WEBHOOK_URL: ${{ secrets.ARCANE_WEBHOOK_URL }}
+        run: |
+          python3 -c 'import os, sys, urllib.parse
+          try:
+              url = urllib.parse.urlsplit(os.environ["ARCANE_WEBHOOK_URL"])
+              host = url.hostname
+              if url.scheme != "https" or not host or url.username or url.password or url.port not in (None, 443) or any(c in host for c in "\r\n,"):
+                  raise ValueError()
+          except ValueError:
+              sys.exit("Invalid Arcane webhook URL; an HTTPS URL on port 443 is required.")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              print("host=" + host, file=output)'
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OIDC_CLIENT_ID }}
+          audience: ${{ secrets.TS_OIDC_AUDIENCE }}
+          tags: tag:runner
+          ping: ${{ steps.arcane.outputs.host }}
+      - name: Notify Arcane
+        env:
+          ARCANE_WEBHOOK_URL: ${{ secrets.ARCANE_WEBHOOK_URL }}
+        run: |
+          status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            --connect-timeout 10 --max-time 30 --request POST --url "$ARCANE_WEBHOOK_URL")" || {
+            echo 'Arcane webhook request failed.' >&2
+            exit 1
+          }
+          if [ "$status" != 202 ]; then
+            echo "Arcane webhook returned HTTP $status; expected 202." >&2
+            exit 1
+          fi
+          echo 'Arcane accepted the redeploy request.'
